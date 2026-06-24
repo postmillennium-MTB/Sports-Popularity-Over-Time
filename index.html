@@ -1,0 +1,569 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from "recharts";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const YEARS = Array.from({ length: 40 }, (_, i) => 1985 + i);
+
+const SPORTS = {
+  skateboarding: {
+    label: "Skateboarding", emoji: "🛹", color: "#f97316",
+    data: [15,18,20,24,28,35,40,48,55,65,72,76,80,85,88,82,75,70,65,62,60,58,56,54,52,50,52,54,56,58,60,62,64,65,66,68,72,75,70,65],
+    note: "X Games (1995), Tony Hawk's Pro Skater (1999), Tokyo Olympics (2021)"
+  },
+  rollerblading: {
+    label: "Rollerblading", emoji: "🛼", color: "#a78bfa",
+    data: [8,10,14,20,28,38,50,62,72,82,90,92,88,80,70,58,45,35,28,22,18,15,12,10,9,8,7,6,6,5,5,5,4,4,4,4,5,5,6,6],
+    note: "Peak ~1994–1997, steep decline into 2000s"
+  },
+  bmx: {
+    label: "BMX", emoji: "🚲", color: "#fbbf24",
+    data: [22,25,27,30,32,35,38,40,42,45,48,50,52,54,55,56,55,54,53,52,51,52,54,56,58,60,62,62,60,58,57,58,60,62,62,64,66,65,62,60],
+    note: "Olympic racing debut 2008, freestyle added 2020"
+  },
+  mountain_bike: {
+    label: "Mountain Bike", emoji: "🚵", color: "#4ade80",
+    data: [5,8,12,18,26,36,46,55,62,68,72,74,75,74,73,72,70,68,66,65,64,63,62,62,62,63,64,65,66,67,68,68,70,72,74,75,76,78,77,75],
+    note: "Grew through 90s boom, Olympic since 1996, sustained growth"
+  },
+  pickleball: {
+    label: "Pickleball", emoji: "🏓", color: "#f87171",
+    data: [1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,3,3,3,3,4,4,5,6,7,8,10,12,15,20,28,38,50,65,78,88,95,100,98],
+    note: "Near-zero until ~2016, explosive post-COVID growth to #1"
+  },
+  cyclocross: {
+    label: "Cyclocross", emoji: "🚴", color: "#fb923c",
+    data: [4,4,5,5,5,5,6,6,7,7,8,8,9,10,12,14,16,18,20,22,24,26,28,30,32,34,35,36,37,38,40,40,40,38,36,37,38,38,36,34],
+    note: "Niche but steady growth through 2010s, plateaued mid-2010s"
+  },
+  golf: {
+    label: "Golf", emoji: "⛳", color: "#2dd4bf",
+    data: [42,45,48,50,52,55,58,60,62,65,70,75,80,85,90,92,90,88,85,80,75,72,70,68,65,63,62,60,58,56,55,55,57,58,59,65,68,65,62,60],
+    note: "Tiger Woods era peak (1997–2009), decline, COVID outdoor boom"
+  },
+  disc_golf: {
+    label: "Disc Golf", emoji: "🥏", color: "#38bdf8",
+    data: [6,6,7,7,8,9,10,11,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,62,66,70,78,84,88,90,88],
+    note: "Steady growth for decades, massive COVID boom (outdoor, distanced)"
+  },
+  racquetball: {
+    label: "Racquetball", emoji: "🎾", color: "#60a5fa",
+    data: [60,65,70,75,78,80,78,75,70,65,58,52,45,40,35,30,26,22,19,16,14,12,11,10,9,9,8,8,7,7,7,6,6,6,5,5,5,5,4,4],
+    note: "Peak in late 80s, long decline as squash/tennis gained share"
+  },
+  squash: {
+    label: "Squash", emoji: "🏸", color: "#e879f9",
+    data: [28,30,32,34,36,38,40,42,44,45,46,47,47,46,45,44,43,42,41,40,39,38,37,36,35,35,34,34,33,32,32,31,30,30,29,29,28,28,27,27],
+    note: "Niche, stable global following, slight slow decline"
+  },
+};
+
+const SPORT_KEYS = Object.keys(SPORTS);
+const SPEED_OPTIONS = [
+  { label: "Slow", ms: 260 },
+  { label: "Med",  ms: 75 },
+  { label: "Fast", ms: 20 },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildBaseData(anchorYear) {
+  return YEARS.map((year, i) => {
+    const point = { year };
+    SPORT_KEYS.forEach(key => {
+      if (!anchorYear) {
+        point[key] = SPORTS[key].data[i];
+      } else {
+        const ai = YEARS.indexOf(anchorYear);
+        const av = SPORTS[key].data[ai];
+        point[key] = av ? Math.round((SPORTS[key].data[i] / av) * 100) : null;
+      }
+    });
+    return point;
+  });
+}
+
+// ─── Tooltip ──────────────────────────────────────────────────────────────────
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const sorted = payload
+    .filter(e => e.value != null)
+    .sort((a, b) => b.value - a.value);
+  return (
+    <div style={{
+      background: "#0a0f1e",
+      border: "1px solid #1e2d4a",
+      borderRadius: 10,
+      padding: "10px 14px",
+      fontSize: 13,
+      boxShadow: "0 4px 28px rgba(0,0,0,0.7)",
+      minWidth: 180,
+    }}>
+      <div style={{ color: "#94a3b8", fontWeight: 700, marginBottom: 8, fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
+        {label}
+      </div>
+      {sorted.map(e => (
+        <div key={e.dataKey} style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 18,
+          color: SPORTS[e.dataKey]?.color,
+          lineHeight: 1.9,
+          fontWeight: 500,
+        }}>
+          <span>{SPORTS[e.dataKey]?.emoji} {SPORTS[e.dataKey]?.label}</span>
+          <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{e.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function SportsPopularity() {
+  const [selected,    setSelected]  = useState(new Set(SPORT_KEYS));
+  const [visibleCount, setVC]       = useState(40);
+  const [isPlaying,   setPlaying]   = useState(false);
+  const [speedIdx,    setSpeedIdx]  = useState(1);
+  const [indexed,     setIndexed]   = useState(false);
+  const [anchorYear,  setAnchor]    = useState(2000);
+  const [hoverSport,  setHoverSport] = useState(null);
+  const timerRef = useRef(null);
+
+  const stop = useCallback(() => {
+    clearInterval(timerRef.current);
+    setPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    timerRef.current = setInterval(() => {
+      setVC(p => {
+        if (p >= 40) { stop(); return 40; }
+        return p + 1;
+      });
+    }, SPEED_OPTIONS[speedIdx].ms);
+    return () => clearInterval(timerRef.current);
+  }, [isPlaying, speedIdx, stop]);
+
+  const play  = () => {
+    if (isPlaying) { stop(); return; }
+    if (visibleCount >= 40) setVC(1);
+    setPlaying(true);
+  };
+  const reset = () => { stop(); setVC(40); };
+  const toggleSport = k => setSelected(p => {
+    const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n;
+  });
+
+  const baseData  = buildBaseData(indexed ? anchorYear : null);
+  const chartData = baseData.map((pt, i) => {
+    if (i >= visibleCount) {
+      const e = { year: pt.year };
+      SPORT_KEYS.forEach(k => { e[k] = null; });
+      return e;
+    }
+    return pt;
+  });
+
+  const currentYear = YEARS[Math.min(visibleCount - 1, 39)];
+  const pct         = ((visibleCount - 1) / 39) * 100;
+  const noneSelected = selected.size === 0;
+
+  const scrubClick = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    stop();
+    setVC(Math.max(1, Math.min(40, Math.round(ratio * 40))));
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={{
+      background: "#0a0f1e",
+      minHeight: "100vh",
+      padding: "28px 32px 40px",
+      color: "#e2e8f0",
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+    }}>
+
+      {/* HEADER ────────────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 22, borderBottom: "1px solid #1e2d4a", paddingBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#f1f5f9", margin: 0, letterSpacing: "-0.3px" }}>
+            Sports Popularity Over Time
+          </h1>
+          <span style={{ fontSize: 12, color: "#3b5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            1985 – 2024
+          </span>
+        </div>
+        <p style={{ color: "#3b5278", fontSize: 13, marginTop: 5, marginBottom: 0 }}>
+          Estimated search interest index (0–100) · Modeled from historical trend data · Select sports, then press Play
+        </p>
+      </div>
+
+      {/* SPORT CHIPS ───────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
+          {[
+            ["All", () => setSelected(new Set(SPORT_KEYS))],
+            ["None", () => setSelected(new Set())],
+          ].map(([lbl, fn]) => (
+            <button key={lbl} onClick={fn} style={{
+              padding: "4px 12px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: "1px solid #1e2d4a",
+              background: "transparent",
+              color: "#4b6a9a",
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}>{lbl}</button>
+          ))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+          {SPORT_KEYS.map(k => {
+            const s  = SPORTS[k];
+            const on = selected.has(k);
+            return (
+              <button
+                key={k}
+                onClick={() => toggleSport(k)}
+                onMouseEnter={() => setHoverSport(k)}
+                onMouseLeave={() => setHoverSport(null)}
+                title={s.note}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: on ? s.color + "1a" : "transparent",
+                  border: `2px solid ${on ? s.color : "#1e2d4a"}`,
+                  color: on ? s.color : "#3b5278",
+                  outline: "none",
+                  transition: "all 0.12s",
+                }}
+              >
+                {s.emoji} {s.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* hover note */}
+        <div style={{ height: 18, marginTop: 8 }}>
+          {hoverSport && (
+            <span style={{ fontSize: 12, color: "#4b6a9a", fontStyle: "italic" }}>
+              {SPORTS[hoverSport].note}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* MODE ROW ──────────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ color: "#4b6a9a", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Mode
+        </span>
+        {[
+          [false, "Absolute", "#3b82f6"],
+          [true,  "Indexed",  "#8b5cf6"],
+        ].map(([val, lbl, accent]) => (
+          <button
+            key={lbl}
+            onClick={() => setIndexed(val)}
+            style={{
+              padding: "5px 14px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              border: indexed === val ? `1.5px solid ${accent}` : "1.5px solid #1e2d4a",
+              background: indexed === val ? accent + "22" : "transparent",
+              color: indexed === val ? accent : "#3b5278",
+            }}
+          >
+            {lbl}
+          </button>
+        ))}
+        {indexed && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: "#4b6a9a", fontSize: 12 }}>Anchor year:</span>
+            <select
+              value={anchorYear}
+              onChange={e => setAnchor(Number(e.target.value))}
+              style={{
+                background: "#111827",
+                border: "1px solid #1e2d4a",
+                color: "#c7d5eb",
+                borderRadius: 8,
+                padding: "4px 10px",
+                fontSize: 13,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <span style={{ color: "#3b5278", fontSize: 11 }}>
+              All sports set to 100 at {anchorYear} — shows relative growth/decline
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* YEAR SCOREBOARD + Y-LABEL ─────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6 }}>
+        <span style={{
+          color: "#3b5278",
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.07em",
+          alignSelf: "center",
+        }}>
+          {indexed ? `Index (${anchorYear} = 100)` : "Interest (0 – 100)"}
+        </span>
+
+        {/* The scoreboard — the signature element */}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "#3b5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Year</span>
+          <span style={{
+            fontSize: 52,
+            fontWeight: 900,
+            fontFamily: "'Courier New', monospace",
+            color: isPlaying ? "#60a5fa" : "#3b82f6",
+            fontVariantNumeric: "tabular-nums",
+            letterSpacing: "-3px",
+            lineHeight: 1,
+            textShadow: isPlaying ? "0 0 30px #3b82f680" : "none",
+            transition: "text-shadow 0.3s",
+          }}>
+            {currentYear}
+          </span>
+        </div>
+      </div>
+
+      {/* CHART ─────────────────────────────────────────────────────────────── */}
+      <div style={{
+        background: "#0d1424",
+        borderRadius: 14,
+        padding: "14px 6px 8px 0",
+        border: "1px solid #1a2844",
+        marginBottom: 10,
+        position: "relative",
+      }}>
+        {noneSelected && (
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#2d4268",
+            fontSize: 14,
+            fontWeight: 500,
+            pointerEvents: "none",
+            zIndex: 1,
+          }}>
+            ↑ Select at least one sport above
+          </div>
+        )}
+        <ResponsiveContainer width="100%" height={360}>
+          <LineChart data={chartData} margin={{ top: 5, right: 20, left: -12, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#131f35" vertical={false} />
+            <XAxis
+              dataKey="year"
+              tick={{ fill: "#2d4268", fontSize: 12, fontWeight: 500 }}
+              axisLine={{ stroke: "#1a2844" }}
+              tickLine={false}
+              interval={4}
+            />
+            <YAxis
+              domain={indexed ? ["auto", "auto"] : [0, 100]}
+              tick={{ fill: "#2d4268", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickCount={6}
+            />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ stroke: "#1e2d4a", strokeWidth: 1 }}
+            />
+            {indexed && (
+              <ReferenceLine
+                y={100}
+                stroke="#2d4268"
+                strokeDasharray="5 4"
+                strokeOpacity={0.7}
+              />
+            )}
+            {SPORT_KEYS.filter(k => selected.has(k)).map(k => (
+              <Line
+                key={k}
+                type="monotone"
+                dataKey={k}
+                stroke={SPORTS[k].color}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 5, strokeWidth: 0 }}
+                isAnimationActive={false}
+                connectNulls={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* SCRUBBER ───────────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 22 }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          color: "#2d4268",
+          fontSize: 11,
+          fontFamily: "monospace",
+          marginBottom: 6,
+        }}>
+          <span>1985</span>
+          <span style={{ color: "#3b5278", fontSize: 10 }}>← drag to scrub →</span>
+          <span>2024</span>
+        </div>
+        <div
+          style={{
+            height: 8,
+            borderRadius: 999,
+            background: "#0d1424",
+            border: "1px solid #1a2844",
+            cursor: "pointer",
+            position: "relative",
+          }}
+          onClick={scrubClick}
+        >
+          <div style={{
+            height: "100%",
+            borderRadius: 999,
+            width: `${pct}%`,
+            background: "linear-gradient(90deg, #1d4ed8, #7c3aed)",
+            pointerEvents: "none",
+          }} />
+          <div style={{
+            position: "absolute",
+            top: "50%",
+            left: `${pct}%`,
+            transform: "translate(-50%, -50%)",
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            background: "#60a5fa",
+            border: "2.5px solid #0a0f1e",
+            boxShadow: "0 0 8px #3b82f660",
+            pointerEvents: "none",
+            transition: isPlaying ? "none" : "left 0.15s",
+          }} />
+        </div>
+      </div>
+
+      {/* CONTROLS ───────────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <button
+          onClick={play}
+          disabled={noneSelected}
+          style={{
+            padding: "10px 26px",
+            borderRadius: 10,
+            fontWeight: 800,
+            fontSize: 14,
+            cursor: noneSelected ? "not-allowed" : "pointer",
+            border: "none",
+            background: noneSelected
+              ? "#1a2844"
+              : isPlaying
+                ? "#dc2626"
+                : "#2563eb",
+            color: noneSelected ? "#2d4268" : "white",
+            letterSpacing: "0.02em",
+            transition: "background 0.15s",
+          }}
+        >
+          {isPlaying ? "⏸  Pause" : "▶  Play"}
+        </button>
+
+        <button
+          onClick={reset}
+          style={{
+            padding: "10px 18px",
+            borderRadius: 10,
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: "pointer",
+            border: "1px solid #1e2d4a",
+            background: "transparent",
+            color: "#4b6a9a",
+          }}
+        >
+          ↺  Reset
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 6 }}>
+          <span style={{ color: "#3b5278", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Speed
+          </span>
+          {SPEED_OPTIONS.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => setSpeedIdx(i)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 7,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                border: speedIdx === i ? "1.5px solid #3b82f6" : "1.5px solid #1e2d4a",
+                background: speedIdx === i ? "#1d3a6e" : "transparent",
+                color: speedIdx === i ? "#93c5fd" : "#3b5278",
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* LEGEND STRIP ──────────────────────────────────────────────────────── */}
+      {selected.size > 0 && (
+        <div style={{
+          marginTop: 24,
+          padding: "12px 16px",
+          background: "#0d1424",
+          borderRadius: 10,
+          border: "1px solid #1a2844",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px 20px",
+        }}>
+          {SPORT_KEYS.filter(k => selected.has(k)).map(k => (
+            <span key={k} style={{ fontSize: 12, color: SPORTS[k].color, fontWeight: 600 }}>
+              {SPORTS[k].emoji} {SPORTS[k].label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* FOOTER ─────────────────────────────────────────────────────────────── */}
+      <p style={{ color: "#1e2d4a", fontSize: 11, marginTop: 18, marginBottom: 0, lineHeight: 1.6 }}>
+        Data reflects estimated search interest trends modeled from publicly available historical sources, not a live API.
+        Values are scaled 0–100. Indexed mode sets each sport to 100 at the anchor year to compare relative growth.
+        Hover chips for context on each sport's trajectory.
+      </p>
+    </div>
+  );
+}
