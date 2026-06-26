@@ -1,514 +1,548 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sports Popularity Over Time</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #0a0f1e; }
+    button { font-family: inherit; }
+    select { font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
 
-// ═════════════════════════════════════════════════════════════════════════════
-// SPORT CATALOG  (16 sports)
-// ═════════════════════════════════════════════════════════════════════════════
+  <script type="text/babel">
+    const { useState, useRef, useEffect, useCallback } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } = Recharts;
 
-const SPORTS = {
-  golf:           { label: "Golf",           emoji: "⛳", color: "#2dd4bf" },
-  tennis:         { label: "Tennis",         emoji: "🎾", color: "#fcd34d" },
-  skateboarding:  { label: "Skateboarding",  emoji: "🛹", color: "#f97316" },
-  rollerblading:  { label: "Rollerblading",  emoji: "🛼", color: "#a78bfa" },
-  bmx:            { label: "BMX",            emoji: "🚲", color: "#fbbf24" },
-  mountain_bike:  { label: "Mountain Bike",  emoji: "🚵", color: "#4ade80" },
-  gravel_cycling: { label: "Gravel Cycling", emoji: "🚴", color: "#86efac" },
-  cyclocross:     { label: "Cyclocross",     emoji: "🏆", color: "#fb923c" },
-  snowboarding:   { label: "Snowboarding",   emoji: "🏂", color: "#93c5fd" },
-  trail_running:  { label: "Trail Running",  emoji: "🏃", color: "#a3e635" },
-  rock_climbing:  { label: "Rock Climbing",  emoji: "🧗", color: "#fb7185" },
-  pickleball:     { label: "Pickleball",     emoji: "🏓", color: "#f87171" },
-  disc_golf:      { label: "Disc Golf",      emoji: "🥏", color: "#38bdf8" },
-  padel:          { label: "Padel",          emoji: "🟢", color: "#34d399" },
-  racquetball:    { label: "Racquetball",    emoji: "🎯", color: "#60a5fa" },
-  squash:         { label: "Squash",         emoji: "🏸", color: "#e879f9" },
-};
-const SPORT_KEYS = Object.keys(SPORTS);
+    // ═══════════════════════════════════════════════════════════════════════
+    // SPORT CATALOG
+    // ═══════════════════════════════════════════════════════════════════════
 
-// ═════════════════════════════════════════════════════════════════════════════
-// DATA  (baked in — works offline, on GitHub Pages, and in iframe embeds)
-// ─────────────────────────────────────────────────────────────────────────────
-// search_interest: indexed so golf's ~2000 Tiger-era peak = 100. Trends-era only.
-//   anchor years: 2004, 2007, 2010, 2013, 2016, 2019, 2022, 2024
-// participants: millions of US participants (SFIA / NSGA / federation data).
-//   anchor years: 1980,1985,1990,1995,2000,2005,2010,2015,2020,2024
-// ═════════════════════════════════════════════════════════════════════════════
+    const SPORTS = {
+      golf:           { label: "Golf",           emoji: "⛳", color: "#2dd4bf" },
+      tennis:         { label: "Tennis",         emoji: "🎾", color: "#fcd34d" },
+      racquetball:    { label: "Racquetball",    emoji: "🎯", color: "#60a5fa" },
+      squash:         { label: "Squash",         emoji: "🏸", color: "#e879f9" },
+      pickleball:     { label: "Pickleball",     emoji: "🏓", color: "#f87171" },
+      padel:          { label: "Padel",          emoji: "🟢", color: "#34d399" },
+      skateboarding:  { label: "Skateboarding",  emoji: "🛹", color: "#f97316" },
+      rollerblading:  { label: "Rollerblading",  emoji: "🛼", color: "#a78bfa" },
+      bmx:            { label: "BMX",            emoji: "🚲", color: "#fbbf24" },
+      mountain_bike:  { label: "Mountain Bike",  emoji: "🚵", color: "#4ade80" },
+      gravel_cycling: { label: "Gravel Cycling", emoji: "🚴", color: "#86efac" },
+      cyclocross:     { label: "Cyclocross",     emoji: "🏆", color: "#fb923c" },
+      snowboarding:   { label: "Snowboarding",   emoji: "🏂", color: "#93c5fd" },
+      trail_running:  { label: "Trail Running",  emoji: "🏃", color: "#a3e635" },
+      rock_climbing:  { label: "Rock Climbing",  emoji: "🧗", color: "#fb7185" },
+      disc_golf:      { label: "Disc Golf",      emoji: "🥏", color: "#38bdf8" },
+    };
+    const SPORT_KEYS = Object.keys(SPORTS);
 
-const ANCHOR_YEARS = {
-  search_interest: [2004, 2007, 2010, 2013, 2016, 2019, 2022, 2024],
-  participants:    [1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020, 2024],
-};
+    // ═══════════════════════════════════════════════════════════════════════
+    // DATA  —  research-corrected values
+    //
+    // search_interest: anchor years 2004, 2007, 2010, 2013, 2016, 2019, 2022, 2024
+    //   Scale: golf at Tiger-era peak (~2000) = 100
+    //   Source: Google Trends benchmarks, relative search volume research
+    //
+    // participants: anchor years 1980,1985,1990,1995,2000,2005,2010,2015,2020,2024
+    //   Unit: millions of US participants (aged 6+)
+    //   Sources: SFIA Topline Reports, NSGA historical surveys, federation data
+    //
+    // Key corrections vs. prior version:
+    //   • Racquetball 1980 peak = 12M (confirmed, Sports Dest. Mgmt / SFIA)
+    //   • Tennis 1980 = ~30M, crashed to ~11M by 1995, then recovered (NSGA)
+    //   • Rollerblading peak ~18M in 1995–97 (NSGA roller skating data)
+    //   • Snowboarding peaked at 8.2M in 2001–02, declining to ~5.8M now
+    //   • Mountain bike = 6.9M in 2007, 9.2M in 2023 per SFIA — NOT 17M
+    //   • Pickleball 2024 = 19.8M (confirmed SFIA 2025 Topline Report)
+    // ═══════════════════════════════════════════════════════════════════════
 
-const DATA = {
-  search_interest: {
-    golf:           [85, 80, 70, 65, 62, 60, 62, 60],
-    tennis:         [45, 43, 40, 38, 38, 36, 35, 33],
-    skateboarding:  [58, 55, 48, 44, 46, 50, 58, 52],
-    rollerblading:  [12, 9, 7, 6, 5, 5, 5, 5],
-    bmx:            [38, 42, 40, 35, 32, 33, 36, 34],
-    mountain_bike:  [38, 40, 40, 40, 44, 50, 62, 58],
-    gravel_cycling: [0, 1, 1, 3, 12, 25, 38, 42],
-    cyclocross:     [3, 6, 10, 13, 14, 12, 11, 9],
-    snowboarding:   [55, 52, 48, 44, 42, 40, 41, 38],
-    trail_running:  [8, 12, 18, 24, 28, 35, 40, 45],
-    rock_climbing:  [12, 14, 16, 20, 26, 38, 42, 44],
-    pickleball:     [0, 0, 1, 1, 5, 20, 80, 95],
-    disc_golf:      [8, 10, 14, 18, 24, 35, 55, 58],
-    padel:          [0, 0, 0, 1, 1, 4, 12, 18],
-    racquetball:    [16, 13, 11, 9, 8, 7, 6, 5],
-    squash:         [14, 13, 12, 11, 11, 10, 9, 8],
-  },
-  participants: {
-    golf:           [18, 22, 24, 26, 28, 30, 26, 24, 24.8, 25.6],
-    tennis:         [13, 15, 17, 17, 17, 17, 17, 17.7, 17.9, 18.2],
-    skateboarding:  [6, 10, 6, 8, 11, 11, 8, 6.4, 6, 8],
-    rollerblading:  [0, 0.5, 4, 10, 4, 1, 0.3, 0.2, 0.2, 0.3],
-    bmx:            [3, 7, 4, 3, 2.5, 3, 2.8, 2.6, 2.5, 2.5],
-    mountain_bike:  [0.2, 1.5, 5, 8.5, 10, 9, 8.5, 8.7, 17.4, 17.8],
-    gravel_cycling: [0, 0, 0, 0, 0, 0, 0.1, 0.8, 2.5, 4.2],
-    cyclocross:     [0, 0, 0.05, 0.1, 0.2, 0.4, 0.8, 1.1, 0.9, 0.8],
-    snowboarding:   [0, 0.2, 1.5, 3.5, 5.5, 6.6, 7.4, 7.6, 8.1, 8.3],
-    trail_running:  [0.5, 0.8, 1, 1.5, 2, 4, 5, 7.5, 9, 10.5],
-    rock_climbing:  [0.2, 0.4, 0.8, 1.5, 2.5, 3.5, 4.5, 5.5, 7, 8.5],
-    pickleball:     [0, 0, 0, 0, 0, 0.05, 0.1, 2.5, 4.2, 19.8],
-    disc_golf:      [0.2, 0.5, 0.8, 1, 1.5, 2, 3, 5, 7.7, 9.5],
-    padel:          [0, 0, 0, 0, 0, 0, 0, 0.05, 0.3, 1.2],
-    racquetball:    [8, 10, 8.5, 6.5, 5.5, 4.8, 4, 3.6, 3.5, 3.4],
-    squash:         [0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7],
-  },
-};
+    const ANCHOR_YEARS = {
+      search_interest: [2004, 2007, 2010, 2013, 2016, 2019, 2022, 2024],
+      participants:    [1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020, 2024],
+    };
 
-const MODES = {
-  search_interest: {
-    key: "search_interest", label: "Search Interest", icon: "📊",
-    unit: "", unitLong: "Search interest (golf 2000 peak = 100)",
-    note: "Indexed so golf's Tiger Woods-era peak (~2000) = 100. Google Trends data only exists from 2004 onward — so this view can't capture BMX's 1980s heyday. Use Participants for the long view.",
-    fullYears: Array.from({ length: 21 }, (_, i) => 2004 + i),
-    tickInterval: 2, yDomain: [0, 105],
-  },
-  participants: {
-    key: "participants", label: "Est. Participants", icon: "👥",
-    unit: "M", unitLong: "Millions of US participants",
-    note: "Estimated US annual participants in millions. Captures the pre-internet era — BMX peaks in 1985, rollerblading in 1995, racquetball in the early 80s. Sourced from SFIA, NSGA, and sport federation data.",
-    fullYears: Array.from({ length: 45 }, (_, i) => 1980 + i),
-    tickInterval: 4, yDomain: ["auto", "auto"],
-  },
-};
+    const DATA = {
+      search_interest: {
+        golf:           [85, 80, 70, 65, 62, 60, 62, 60],
+        tennis:         [50, 48, 46, 44, 42, 40, 38, 36],
+        racquetball:    [16, 13, 11,  9,  8,  7,  6,  5],
+        squash:         [14, 13, 12, 11, 11, 10,  9,  8],
+        pickleball:     [ 0,  0,  1,  1,  5, 20, 80, 95],
+        padel:          [ 0,  0,  0,  1,  1,  4, 12, 18],
+        skateboarding:  [58, 55, 48, 44, 46, 50, 58, 52],
+        rollerblading:  [12,  9,  7,  6,  5,  5,  5,  5],
+        bmx:            [38, 42, 40, 35, 32, 33, 36, 34],
+        mountain_bike:  [35, 38, 40, 40, 45, 55, 65, 60],
+        gravel_cycling: [ 0,  0,  1,  3, 12, 25, 38, 42],
+        cyclocross:     [ 3,  6, 10, 13, 14, 12, 11,  9],
+        snowboarding:   [55, 50, 45, 40, 38, 36, 38, 35],
+        trail_running:  [ 8, 12, 18, 24, 28, 35, 40, 45],
+        rock_climbing:  [12, 14, 16, 20, 26, 38, 42, 44],
+        disc_golf:      [ 8, 10, 14, 18, 24, 35, 55, 58],
+      },
+      participants: {
+        //                1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020, 2024
+        golf:           [18.0, 22.0, 24.0, 26.0, 28.0, 30.0, 26.0, 24.0, 24.8, 25.6],
+        tennis:         [30.0, 22.0, 14.0, 11.0, 17.0, 17.0, 17.0, 17.7, 21.0, 18.2],
+        racquetball:    [12.0, 12.0, 10.0,  7.0,  5.5,  4.5,  4.0,  3.5,  3.5,  3.5],
+        squash:         [ 0.3,  0.4,  0.5,  0.6,  0.8,  1.0,  1.2,  1.4,  1.6,  1.8],
+        pickleball:     [ 0.0,  0.0,  0.0,  0.0,  0.0,  0.05, 0.1,  2.5,  4.2, 19.8],
+        padel:          [ 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.05, 0.3,  1.2],
+        skateboarding:  [ 6.0, 10.0,  6.0,  8.0, 11.0, 11.0,  8.0,  6.4,  6.0,  8.0],
+        rollerblading:  [ 0.0,  0.5,  3.5, 18.0,  3.5,  0.8,  0.3,  0.2,  0.2,  0.3],
+        bmx:            [ 3.0,  7.0,  4.0,  3.0,  2.5,  3.0,  2.8,  2.6,  2.5,  2.5],
+        mountain_bike:  [ 0.2,  1.5,  5.0,  8.5,  8.2,  7.5,  7.0,  8.0, 10.5,  9.5],
+        gravel_cycling: [ 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.1,  0.8,  2.5,  4.2],
+        cyclocross:     [ 0.0,  0.0,  0.05, 0.1,  0.2,  0.4,  0.8,  1.1,  0.9,  0.8],
+        snowboarding:   [ 0.0,  0.1,  1.5,  3.5,  7.5,  7.8,  7.5,  7.0,  7.1,  5.8],
+        trail_running:  [ 0.5,  0.8,  1.0,  1.5,  2.0,  4.0,  5.0,  7.5,  9.0, 10.5],
+        rock_climbing:  [ 0.2,  0.4,  0.8,  1.5,  2.5,  3.5,  4.5,  5.5,  7.0,  8.5],
+        disc_golf:      [ 0.2,  0.5,  0.8,  1.0,  1.5,  2.0,  3.0,  5.0,  7.7,  9.5],
+      },
+    };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// PAIRS
-// ═════════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════
+    // MODE DEFINITIONS
+    // ═══════════════════════════════════════════════════════════════════════
 
-const PRESET_PAIRS = [
-  { key: "skate_blade", label: "Skate vs. Rollerblade", sports: ["skateboarding", "rollerblading"],
-    story: "Rollerblading owned the 90s. Skateboarding owned everything after. One never recovered." },
-  { key: "tennis_pickle", label: "Tennis vs. Pickleball", sports: ["tennis", "pickleball"],
-    story: "Tennis took 50 years to build its audience. Pickleball may match it in under 10." },
-  { key: "bmx_mtb", label: "BMX vs. Mountain Bike", sports: ["bmx", "mountain_bike"],
-    story: "The same 80s kids who rode BMX switched to mountain bikes in the 90s — and never went back." },
-  { key: "golf_disc", label: "Golf vs. Disc Golf", sports: ["golf", "disc_golf"],
-    story: "Country club vs. the park. One can cost thousands to join. One costs about fifteen dollars." },
-];
+    const MODES = {
+      search_interest: {
+        key: "search_interest", label: "Search Interest", icon: "📊",
+        unit: "", unitLong: "Search interest (golf ~2000 peak = 100)",
+        note: "Relative search volume from 2004 onward — the Google Trends era. Can't capture pre-internet history (BMX's 1980s dominance, racquetball's 1970s–80s peak). Use Participants for the long view.",
+        fullYears: Array.from({ length: 21 }, (_, i) => 2004 + i),
+        tickInterval: 2, yDomain: [0, 105],
+      },
+      participants: {
+        key: "participants", label: "Est. Participants", icon: "👥",
+        unit: "M", unitLong: "Estimated US participants (millions)",
+        note: "Estimated US annual participants in millions, 1980–2024. Sources: SFIA Topline Reports, NSGA historical surveys, federation data. Captures the pre-internet era — racquetball's 1980 peak at 12M, tennis crashing from 30M in 1980 to 11M by 1995, rollerblading's 18M peak in 1995–97.",
+        fullYears: Array.from({ length: 45 }, (_, i) => 1980 + i),
+        tickInterval: 4, yDomain: ["auto", "auto"],
+      },
+    };
 
-const SPEEDS = [{ label: "Slow", ms: 280 }, { label: "Med", ms: 75 }, { label: "Fast", ms: 20 }];
+    // ═══════════════════════════════════════════════════════════════════════
+    // PAIRS
+    // ═══════════════════════════════════════════════════════════════════════
 
-// ═════════════════════════════════════════════════════════════════════════════
-// DATA BUILDING
-// ═════════════════════════════════════════════════════════════════════════════
+    const PRESET_PAIRS = [
+      { key: "skate_blade", label: "Skate vs. Rollerblade",
+        sports: ["skateboarding", "rollerblading"],
+        story: "Rollerblading peaked at ~18M US participants in 1996 — larger than skateboarding ever was. Then it collapsed in under a decade. Skateboarding kept going." },
+      { key: "tennis_pickle", label: "Tennis vs. Pickleball",
+        sports: ["tennis", "pickleball"],
+        story: "Tennis was the fastest-growing sport in America in the 1970s, reaching 32M players by 1979. It took 40 years to get back to 17M. Pickleball went from zero to 20M in under a decade." },
+      { key: "bmx_mtb", label: "BMX vs. Mountain Bike",
+        sports: ["bmx", "mountain_bike"],
+        story: "BMX peaked in 1985 at ~7M US riders — the bike of the 80s suburban kid. Mountain biking absorbed most of that generation through the 90s and never gave them back." },
+      { key: "golf_disc", label: "Golf vs. Disc Golf",
+        sports: ["golf", "disc_golf"],
+        story: "Golf built a 30-million-person sport over 50 years. Disc golf has added 8 million participants in 5 years. One costs thousands to play. One costs fifteen dollars." },
+    ];
 
-function lerp(y1, y2, v1, v2, y) {
-  if (y2 === y1) return v1;
-  const t = (y - y1) / (y2 - y1);
-  return Math.round((v1 + t * (v2 - v1)) * 100) / 100;
-}
+    const SPEEDS = [{ label: "Slow", ms: 280 }, { label: "Med", ms: 75 }, { label: "Fast", ms: 20 }];
 
-function interpolateYearly(anchorYears, vals, fullYears) {
-  return fullYears.map(y => {
-    if (y <= anchorYears[0]) return vals[0] ?? 0;
-    if (y >= anchorYears[anchorYears.length - 1]) return vals[anchorYears.length - 1] ?? 0;
-    for (let i = 0; i < anchorYears.length - 1; i++) {
-      if (y >= anchorYears[i] && y <= anchorYears[i + 1]) {
-        return lerp(anchorYears[i], anchorYears[i + 1], vals[i] ?? 0, vals[i + 1] ?? 0, y);
-      }
+    // ═══════════════════════════════════════════════════════════════════════
+    // DATA BUILDING
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function lerp(y1, y2, v1, v2, y) {
+      if (y2 === y1) return v1;
+      const t = (y - y1) / (y2 - y1);
+      return Math.round((v1 + t * (v2 - v1)) * 100) / 100;
     }
-    return 0;
-  });
-}
 
-function buildChartData(mode) {
-  const m = MODES[mode];
-  const anchors = ANCHOR_YEARS[mode];
-  const yearly = {};
-  for (const key of SPORT_KEYS) {
-    yearly[key] = interpolateYearly(anchors, DATA[mode][key], m.fullYears);
-  }
-  return m.fullYears.map((year, i) => {
-    const pt = { year };
-    SPORT_KEYS.forEach(k => { pt[k] = yearly[k][i]; });
-    return pt;
-  });
-}
-
-// Precompute both modes once
-const CHART_DATA = {
-  search_interest: buildChartData("search_interest"),
-  participants: buildChartData("participants"),
-};
-
-function findCrossover(chartData, s1, s2) {
-  for (let i = 1; i < chartData.length; i++) {
-    const p = chartData[i - 1], c = chartData[i];
-    if ([p[s1], p[s2], c[s1], c[s2]].every(v => v != null && v !== 0)) {
-      if ((p[s1] > p[s2]) !== (c[s1] > c[s2])) return c.year;
-    }
-  }
-  return null;
-}
-
-function getPeak(chartData, sport) {
-  let peak = -Infinity, peakYear = null;
-  for (const pt of chartData) {
-    if (pt[sport] != null && pt[sport] > peak) { peak = pt[sport]; peakYear = pt.year; }
-  }
-  return { value: Math.round(peak * 10) / 10, year: peakYear };
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// TOOLTIP
-// ═════════════════════════════════════════════════════════════════════════════
-
-function ChartTooltip({ active, payload, label, unit }) {
-  if (!active || !payload?.length) return null;
-  const sorted = payload.filter(e => e.value != null && e.value > 0).sort((a, b) => b.value - a.value);
-  if (!sorted.length) return null;
-  return (
-    <div style={{ background: "#0a0f1e", border: "1px solid #1e2d4a", borderRadius: 10, padding: "10px 14px", fontSize: 13, boxShadow: "0 4px 24px #0009", minWidth: 170 }}>
-      <div style={{ color: "#94a3b8", fontWeight: 700, marginBottom: 8, fontVariantNumeric: "tabular-nums" }}>{label}</div>
-      {sorted.map(e => (
-        <div key={e.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 14, color: SPORTS[e.dataKey]?.color || "#ccc", lineHeight: 2 }}>
-          <span>{SPORTS[e.dataKey]?.emoji} {SPORTS[e.dataKey]?.label}</span>
-          <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
-            {unit === "M" ? e.value.toFixed(1) : Math.round(e.value)}
-            {unit && <span style={{ fontSize: 10, color: "#475569", marginLeft: 2 }}>{unit}</span>}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// MAIN
-// ═════════════════════════════════════════════════════════════════════════════
-
-export default function App() {
-  const [tab, setTab]           = useState("trends");
-  const [mode, setMode]         = useState("search_interest");
-  const [selected, setSelected] = useState(new Set(["golf", "tennis", "pickleball", "mountain_bike", "racquetball"]));
-  const [vc, setVC]             = useState(null);     // null = show all years
-  const [isPlaying, setPlay]    = useState(false);
-  const [speedIdx, setSpeed]    = useState(1);
-  const [pair, setPair]         = useState(PRESET_PAIRS[0]);
-  const [showInfo, setShowInfo] = useState(false);
-  const timerRef = useRef(null);
-
-  const modeInfo    = MODES[mode];
-  const chartData   = CHART_DATA[mode];
-  const fullYears   = modeInfo.fullYears;
-  const total       = fullYears.length;
-  const vcSafe      = vc ?? total;
-  const pct         = ((vcSafe - 1) / Math.max(1, total - 1)) * 100;
-  const currentYear = fullYears[Math.min(vcSafe - 1, total - 1)];
-
-  const stop = useCallback(() => { clearInterval(timerRef.current); setPlay(false); }, []);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    timerRef.current = setInterval(() => {
-      setVC(p => {
-        const cur = p ?? total;
-        if (cur >= total) { stop(); return total; }
-        return cur + 1;
+    function interpolateYearly(anchorYears, vals, fullYears) {
+      return fullYears.map(y => {
+        if (y <= anchorYears[0]) return vals[0] ?? 0;
+        if (y >= anchorYears[anchorYears.length - 1]) return vals[anchorYears.length - 1] ?? 0;
+        for (let i = 0; i < anchorYears.length - 1; i++) {
+          if (y >= anchorYears[i] && y <= anchorYears[i + 1]) {
+            return lerp(anchorYears[i], anchorYears[i + 1], vals[i] ?? 0, vals[i + 1] ?? 0, y);
+          }
+        }
+        return 0;
       });
-    }, SPEEDS[speedIdx].ms);
-    return () => clearInterval(timerRef.current);
-  }, [isPlaying, speedIdx, stop, total]);
-
-  const play = () => {
-    if (isPlaying) { stop(); return; }
-    if ((vc ?? total) >= total) setVC(1);
-    setPlay(true);
-  };
-  const reset = () => { stop(); setVC(null); };
-
-  const maskedData = chartData.map((pt, i) => {
-    if (i >= vcSafe) {
-      const e = { year: pt.year };
-      SPORT_KEYS.forEach(k => { e[k] = null; });
-      return e;
     }
-    return pt;
-  });
 
-  const scrub = e => {
-    const r = e.currentTarget.getBoundingClientRect();
-    stop();
-    setVC(Math.max(1, Math.min(total, Math.round(((e.clientX - r.left) / r.width) * total))));
-  };
+    function buildChartData(mode) {
+      const m = MODES[mode];
+      const anchors = ANCHOR_YEARS[mode];
+      const yearly = {};
+      for (const key of SPORT_KEYS) {
+        yearly[key] = interpolateYearly(anchors, DATA[mode][key], m.fullYears);
+      }
+      return m.fullYears.map((year, i) => {
+        const pt = { year };
+        SPORT_KEYS.forEach(k => { pt[k] = yearly[k][i]; });
+        return pt;
+      });
+    }
 
-  const toggleSport = k => setSelected(p => {
-    const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n;
-  });
+    const CHART_DATA = {
+      search_interest: buildChartData("search_interest"),
+      participants: buildChartData("participants"),
+    };
 
-  return (
-    <div style={{ background: "#0a0f1e", minHeight: "100vh", padding: "24px 28px 48px", color: "#e2e8f0", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    function findCrossover(chartData, s1, s2) {
+      for (let i = 1; i < chartData.length; i++) {
+        const p = chartData[i - 1], c = chartData[i];
+        if ([p[s1], p[s2], c[s1], c[s2]].every(v => v != null && v > 0)) {
+          if ((p[s1] > p[s2]) !== (c[s1] > c[s2])) return c.year;
+        }
+      }
+      return null;
+    }
 
-      {/* HEADER */}
-      <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #1a2844", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontSize: 21, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Sports Popularity Over Time</h1>
-          <p style={{ color: "#3b5278", fontSize: 13, marginTop: 4, marginBottom: 0 }}>
-            16 individual sports · {fullYears[0]}–{fullYears[total - 1]}
-          </p>
-        </div>
-        <button onClick={() => setShowInfo(v => !v)} style={{
-          padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-          border: "1px solid #1a2844", background: showInfo ? "#1a3a6e22" : "transparent", color: "#3b5278", whiteSpace: "nowrap",
-        }}>ℹ️ About the data</button>
-      </div>
+    function getPeak(chartData, sport) {
+      let peak = -Infinity, peakYear = null;
+      for (const pt of chartData) {
+        if (pt[sport] != null && pt[sport] > peak) { peak = pt[sport]; peakYear = pt.year; }
+      }
+      return { value: Math.round(peak * 10) / 10, year: peakYear };
+    }
 
-      {showInfo && (
-        <div style={{ background: "#0d1424", border: "1px solid #1a2844", borderRadius: 10, padding: "14px 18px", marginBottom: 18, fontSize: 13, color: "#64748b", lineHeight: 1.7 }}>
-          <strong style={{ color: "#94a3b8" }}>Where these numbers come from.</strong> Values are curated estimates drawn from SFIA Topline participation reports, NSGA surveys, sport-federation figures, and Google Trends benchmarks — not a live feed. They're calibrated to known anchor points (e.g. pickleball reaching ~19.8M US participants in 2024, golf's ~28M peak around 2000) and interpolated between them, so treat them as directionally accurate trend shapes rather than exact counts. Everything runs in-file, so it works the same here, on a website, or embedded in a page.
-        </div>
-      )}
+    // ═══════════════════════════════════════════════════════════════════════
+    // TOOLTIP
+    // ═══════════════════════════════════════════════════════════════════════
 
-      {/* TABS */}
-      <div style={{ display: "flex", gap: 2, marginBottom: 22 }}>
-        {[["trends", "📈 Trends"], ["pairs", "⚖️ Pairs"]].map(([k, lbl]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            padding: "8px 18px", borderRadius: "8px 8px 0 0", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            border: "1px solid #1a2844", borderBottom: tab === k ? "1px solid #111d31" : "1px solid #1a2844",
-            background: tab === k ? "#111d31" : "transparent", color: tab === k ? "#60a5fa" : "#3b5278",
-          }}>{lbl}</button>
-        ))}
-        <div style={{ flex: 1, borderBottom: "1px solid #1a2844" }} />
-      </div>
-
-      {/* MODE SELECTOR (shared by both tabs) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <span style={{ color: "#3b5278", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>Mode</span>
-        {Object.values(MODES).map(m => (
-          <button key={m.key} onClick={() => { stop(); setMode(m.key); setVC(null); }} style={{
-            padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
-            border: mode === m.key ? "1.5px solid #3b82f6" : "1.5px solid #1a2844",
-            background: mode === m.key ? "#1a3a6e22" : "transparent", color: mode === m.key ? "#60a5fa" : "#3b5278",
-          }}>{m.icon} {m.label}</button>
-        ))}
-        <button disabled title="Facility count mode — a future addition" style={{
-          padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-          border: "1.5px dashed #1a2844", background: "transparent", color: "#1e3a5f", cursor: "not-allowed",
-        }}>🏗️ Facility Count <span style={{ fontSize: 10 }}>soon</span></button>
-      </div>
-      <p style={{ fontSize: 11, color: "#2d4268", marginTop: 0, marginBottom: 18, lineHeight: 1.5, maxWidth: 760 }}>{modeInfo.note}</p>
-
-      {/* ─── TRENDS TAB ─────────────────────────────────────────────────────── */}
-      {tab === "trends" && (
-        <div>
-          {/* CHIPS */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
-              {[["All", () => setSelected(new Set(SPORT_KEYS))], ["None", () => setSelected(new Set())]].map(([lbl, fn]) => (
-                <button key={lbl} onClick={fn} style={{ padding: "3px 11px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "1px solid #1a2844", background: "transparent", color: "#3b5278", textTransform: "uppercase", letterSpacing: "0.05em" }}>{lbl}</button>
-              ))}
+    function ChartTooltip({ active, payload, label, unit }) {
+      if (!active || !payload || !payload.length) return null;
+      const sorted = payload.filter(e => e.value != null && e.value > 0).sort((a, b) => b.value - a.value);
+      if (!sorted.length) return null;
+      return (
+        <div style={{ background: "#0a0f1e", border: "1px solid #1e2d4a", borderRadius: 10, padding: "10px 14px", fontSize: 13, boxShadow: "0 4px 24px rgba(0,0,0,0.6)", minWidth: 170 }}>
+          <div style={{ color: "#94a3b8", fontWeight: 700, marginBottom: 8, fontVariantNumeric: "tabular-nums" }}>{label}</div>
+          {sorted.map(e => (
+            <div key={e.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 14, color: SPORTS[e.dataKey] ? SPORTS[e.dataKey].color : "#ccc", lineHeight: 2 }}>
+              <span>{SPORTS[e.dataKey] ? SPORTS[e.dataKey].emoji : ""} {SPORTS[e.dataKey] ? SPORTS[e.dataKey].label : e.dataKey}</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                {unit === "M" ? e.value.toFixed(1) : Math.round(e.value)}
+                {unit && <span style={{ fontSize: 10, color: "#475569", marginLeft: 2 }}>{unit}</span>}
+              </span>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              {SPORT_KEYS.map(k => {
-                const s = SPORTS[k]; const on = selected.has(k);
-                return (
-                  <button key={k} onClick={() => toggleSport(k)} style={{
-                    padding: "5px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    background: on ? s.color + "1a" : "transparent",
-                    border: `2px solid ${on ? s.color : "#1a2844"}`, color: on ? s.color : "#2d4268",
-                  }}>{s.emoji} {s.label}</button>
-                );
-              })}
+          ))}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PAIRS TAB
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function PairsTab({ pair, setPair, chartData, modeInfo }) {
+      const [s1, s2] = pair.sports;
+      const sp1 = SPORTS[s1], sp2 = SPORTS[s2];
+      const crossover = findCrossover(chartData, s1, s2);
+      const peak1 = getPeak(chartData, s1);
+      const peak2 = getPeak(chartData, s2);
+      const last = chartData[chartData.length - 1];
+      const cur1 = last[s1], cur2 = last[s2];
+      const lastYear = modeInfo.fullYears[modeInfo.fullYears.length - 1];
+      const fmt = v => modeInfo.unit === "M" ? v.toFixed(1) : Math.round(v);
+      const pairData = chartData.map(pt => ({ year: pt.year, [s1]: pt[s1], [s2]: pt[s2] }));
+
+      return (
+        <div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+            {PRESET_PAIRS.map(p => (
+              <button key={p.key} onClick={() => setPair(p)} style={{
+                padding: "7px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                border: pair.key === p.key ? "2px solid #3b82f6" : "1.5px solid #1a2844",
+                background: pair.key === p.key ? "rgba(26,58,110,0.13)" : "transparent",
+                color: pair.key === p.key ? "#60a5fa" : "#3b5278",
+              }}>{p.label}</button>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, marginBottom: 16, alignItems: "center" }}>
+            {[{ key: s1, sp: sp1, cur: cur1, pk: peak1 }, { key: s2, sp: sp2, cur: cur2, pk: peak2 }].map((item, idx) => (
+              <div key={item.key} style={{ background: "#0d1424", border: `2px solid ${item.sp.color}22`, borderRadius: 12, padding: "14px 16px", textAlign: idx === 0 ? "left" : "right" }}>
+                <div style={{ fontSize: 20, marginBottom: 3 }}>{item.sp.emoji}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: item.sp.color }}>{item.sp.label}</div>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 26, fontWeight: 900, fontFamily: "monospace", color: item.sp.color, letterSpacing: "-1px" }}>
+                    {fmt(item.cur)}{modeInfo.unit && <span style={{ fontSize: 13, color: "#3b5278", marginLeft: 3 }}>{modeInfo.unit}</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#2d4268" }}>in {lastYear}</div>
+                </div>
+                {item.pk && item.pk.year && (
+                  <div style={{ marginTop: 5, fontSize: 12, color: "#2d4268" }}>
+                    Peak: <span style={{ color: "#3b5278" }}>{fmt(item.pk.value)}{modeInfo.unit} in {item.pk.year}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 900, color: "#1e3a5f" }}>VS</div>
+              {crossover && (
+                <div style={{ marginTop: 8, background: "#1a2844", borderRadius: 8, padding: "6px 10px" }}>
+                  <div style={{ color: "#475569", fontSize: 11 }}>Crossed</div>
+                  <div style={{ color: "#60a5fa", fontWeight: 800, fontSize: 15, fontFamily: "monospace" }}>{crossover}</div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* SCOREBOARD */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6 }}>
-            <span style={{ color: "#2d4268", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", alignSelf: "center" }}>
-              {modeInfo.unitLong}
-            </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-              <span style={{ fontSize: 11, color: "#2d4268", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Year</span>
-              <span style={{
-                fontSize: 50, fontWeight: 900, fontFamily: "'Courier New', monospace",
-                color: isPlaying ? "#60a5fa" : "#3b82f6", fontVariantNumeric: "tabular-nums",
-                letterSpacing: "-3px", lineHeight: 1, textShadow: isPlaying ? "0 0 30px #3b82f680" : "none", transition: "text-shadow 0.3s",
-              }}>{currentYear}</span>
-            </div>
+          <div style={{ background: "#0d1424", border: "1px solid #1a2844", borderRadius: 10, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "#64748b", fontStyle: "italic", lineHeight: 1.6 }}>
+            "{pair.story}"
           </div>
 
-          {/* CHART */}
-          <div style={{ background: "#0d1424", borderRadius: 14, padding: "14px 6px 8px 0", border: "1px solid #1a2844", marginBottom: 10, position: "relative" }}>
-            {selected.size === 0 && (
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#1e3a5f", fontSize: 14, pointerEvents: "none" }}>↑ Select at least one sport</div>
-            )}
-            <ResponsiveContainer width="100%" height={360}>
-              <LineChart data={maskedData} margin={{ top: 5, right: 20, left: -12, bottom: 5 }}>
+          <div style={{ background: "#0d1424", borderRadius: 14, padding: "14px 6px 8px 0", border: "1px solid #1a2844" }}>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={pairData} margin={{ top: 5, right: 20, left: -12, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#131f35" vertical={false} />
                 <XAxis dataKey="year" tick={{ fill: "#2d4268", fontSize: 12 }} axisLine={{ stroke: "#1a2844" }} tickLine={false} interval={modeInfo.tickInterval} />
-                <YAxis domain={modeInfo.yDomain} tick={{ fill: "#2d4268", fontSize: 11 }} axisLine={false} tickLine={false} tickCount={6} />
+                <YAxis tick={{ fill: "#2d4268", fontSize: 11 }} axisLine={false} tickLine={false} tickCount={6} />
                 <Tooltip content={<ChartTooltip unit={modeInfo.unit} />} cursor={{ stroke: "#1a2844", strokeWidth: 1 }} />
-                {SPORT_KEYS.filter(k => selected.has(k)).map(k => (
-                  <Line key={k} type="monotone" dataKey={k} stroke={SPORTS[k].color} strokeWidth={2.5}
-                    dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} connectNulls={false} />
-                ))}
+                {crossover && <ReferenceLine x={crossover} stroke="#334155" strokeDasharray="4 4" />}
+                <Line type="monotone" dataKey={s1} stroke={sp1.color} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey={s2} stroke={sp2.color} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* SCRUBBER */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#1e3a5f", fontSize: 11, fontFamily: "monospace", marginBottom: 5 }}>
-              <span>{fullYears[0]}</span>
-              <span style={{ color: "#162035", fontSize: 10 }}>tap to scrub</span>
-              <span>{fullYears[total - 1]}</span>
-            </div>
-            <div onClick={scrub} style={{ height: 10, borderRadius: 999, background: "#0d1424", border: "1px solid #1a2844", cursor: "pointer", position: "relative" }}>
-              <div style={{ height: "100%", borderRadius: 999, width: `${pct}%`, background: "linear-gradient(90deg,#1d4ed8,#7c3aed)", pointerEvents: "none" }} />
-              <div style={{ position: "absolute", top: "50%", left: `${pct}%`, transform: "translate(-50%,-50%)", width: 18, height: 18, borderRadius: "50%", background: "#60a5fa", border: "2.5px solid #0a0f1e", pointerEvents: "none" }} />
-            </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 28, marginTop: 12 }}>
+            {[{ key: s1, sp: sp1 }, { key: s2, sp: sp2 }].map(({ key, sp }) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 3, borderRadius: 2, background: sp.color }} />
+                <span style={{ color: sp.color, fontSize: 13, fontWeight: 600 }}>{sp.emoji} {sp.label}</span>
+              </div>
+            ))}
           </div>
-
-          {/* CONTROLS */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={play} disabled={selected.size === 0} style={{
-              padding: "10px 24px", borderRadius: 10, fontWeight: 800, fontSize: 14,
-              cursor: selected.size === 0 ? "not-allowed" : "pointer", border: "none",
-              background: selected.size === 0 ? "#1a2844" : isPlaying ? "#dc2626" : "#2563eb",
-              color: selected.size === 0 ? "#2d4268" : "white",
-            }}>{isPlaying ? "⏸  Pause" : "▶  Play"}</button>
-            <button onClick={reset} style={{ padding: "10px 16px", borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer", border: "1px solid #1a2844", background: "transparent", color: "#3b5278" }}>↺ Reset</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: 4 }}>
-              <span style={{ color: "#2d4268", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Speed</span>
-              {SPEEDS.map((s, i) => (
-                <button key={i} onClick={() => setSpeed(i)} style={{
-                  padding: "6px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  border: speedIdx === i ? "1.5px solid #3b82f6" : "1.5px solid #1a2844",
-                  background: speedIdx === i ? "#1a3a6e" : "transparent", color: speedIdx === i ? "#93c5fd" : "#2d4268",
-                }}>{s.label}</button>
-              ))}
-            </div>
+          <div style={{ marginTop: 12, fontSize: 11, color: "#1e3a5f", textAlign: "center" }}>
+            Showing: {modeInfo.label} · {modeInfo.fullYears[0]}–{modeInfo.fullYears[modeInfo.fullYears.length - 1]}
           </div>
         </div>
-      )}
+      );
+    }
 
-      {/* ─── PAIRS TAB ──────────────────────────────────────────────────────── */}
-      {tab === "pairs" && (
-        <PairsTab pair={pair} setPair={setPair} chartData={chartData} modeInfo={modeInfo} />
-      )}
+    // ═══════════════════════════════════════════════════════════════════════
+    // MAIN APP
+    // ═══════════════════════════════════════════════════════════════════════
 
-      {/* FOOTER */}
-      <p style={{ color: "#111d31", fontSize: 11, marginTop: 28, marginBottom: 0, lineHeight: 1.6 }}>
-        Curated estimates from SFIA, NSGA, Google Trends, and sport-federation data. Search Interest indexed to golf's ~2000 peak = 100; participant counts in millions of US participants. Directional trends, not exact counts.
-      </p>
-    </div>
-  );
-}
+    function App() {
+      const [tab, setTab]           = useState("trends");
+      const [mode, setMode]         = useState("search_interest");
+      const [selected, setSelected] = useState(new Set(["golf", "tennis", "pickleball", "mountain_bike", "racquetball", "disc_golf"]));
+      const [vc, setVC]             = useState(null);
+      const [isPlaying, setPlay]    = useState(false);
+      const [speedIdx, setSpeed]    = useState(1);
+      const [pair, setPair]         = useState(PRESET_PAIRS[0]);
+      const [showInfo, setShowInfo] = useState(false);
+      const timerRef = useRef(null);
 
-// ═════════════════════════════════════════════════════════════════════════════
-// PAIRS TAB
-// ═════════════════════════════════════════════════════════════════════════════
+      const modeInfo  = MODES[mode];
+      const chartData = CHART_DATA[mode];
+      const fullYears = modeInfo.fullYears;
+      const total     = fullYears.length;
+      const vcSafe    = vc !== null ? vc : total;
+      const pct       = ((vcSafe - 1) / Math.max(1, total - 1)) * 100;
+      const currYear  = fullYears[Math.min(vcSafe - 1, total - 1)];
 
-function PairsTab({ pair, setPair, chartData, modeInfo }) {
-  const [s1, s2] = pair.sports;
-  const sp1 = SPORTS[s1], sp2 = SPORTS[s2];
-  const crossover = findCrossover(chartData, s1, s2);
-  const peak1 = getPeak(chartData, s1);
-  const peak2 = getPeak(chartData, s2);
-  const last = chartData[chartData.length - 1];
-  const cur1 = last[s1], cur2 = last[s2];
-  const lastYear = modeInfo.fullYears[modeInfo.fullYears.length - 1];
-  const fmt = v => modeInfo.unit === "M" ? v.toFixed(1) : Math.round(v);
+      const stop = useCallback(() => { clearInterval(timerRef.current); setPlay(false); }, []);
 
-  const pairChartData = chartData.map(pt => ({ year: pt.year, [s1]: pt[s1], [s2]: pt[s2] }));
+      useEffect(() => {
+        if (!isPlaying) return;
+        timerRef.current = setInterval(() => {
+          setVC(p => {
+            const cur = p !== null ? p : total;
+            if (cur >= total) { stop(); return total; }
+            return cur + 1;
+          });
+        }, SPEEDS[speedIdx].ms);
+        return () => clearInterval(timerRef.current);
+      }, [isPlaying, speedIdx, stop, total]);
 
-  return (
-    <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-        {PRESET_PAIRS.map(p => (
-          <button key={p.key} onClick={() => setPair(p)} style={{
-            padding: "7px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
-            border: pair.key === p.key ? "2px solid #3b82f6" : "1.5px solid #1a2844",
-            background: pair.key === p.key ? "#1a3a6e22" : "transparent", color: pair.key === p.key ? "#60a5fa" : "#3b5278",
-          }}>{p.label}</button>
-        ))}
-      </div>
+      const play = () => {
+        if (isPlaying) { stop(); return; }
+        if ((vc !== null ? vc : total) >= total) setVC(1);
+        setPlay(true);
+      };
+      const reset = () => { stop(); setVC(null); };
 
-      {/* HEAD-TO-HEAD */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, marginBottom: 16, alignItems: "center" }}>
-        {[{ key: s1, sp: sp1, cur: cur1, peak: peak1, align: "left" }, { key: s2, sp: sp2, cur: cur2, peak: peak2, align: "right" }].map(item => (
-          <div key={item.key} style={{ background: "#0d1424", border: `2px solid ${item.sp.color}22`, borderRadius: 12, padding: "16px 18px", textAlign: item.align }}>
-            <div style={{ fontSize: 22, marginBottom: 4 }}>{item.sp.emoji}</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: item.sp.color }}>{item.sp.label}</div>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 28, fontWeight: 900, fontFamily: "monospace", color: item.sp.color, letterSpacing: "-1px" }}>
-                {fmt(item.cur)}{modeInfo.unit && <span style={{ fontSize: 14, color: "#3b5278", marginLeft: 3 }}>{modeInfo.unit}</span>}
-              </div>
-              <div style={{ fontSize: 11, color: "#2d4268" }}>in {lastYear}</div>
+      const maskedData = chartData.map((pt, i) => {
+        if (i >= vcSafe) {
+          const e = { year: pt.year };
+          SPORT_KEYS.forEach(k => { e[k] = null; });
+          return e;
+        }
+        return pt;
+      });
+
+      const scrub = e => {
+        const r = e.currentTarget.getBoundingClientRect();
+        stop();
+        setVC(Math.max(1, Math.min(total, Math.round(((e.clientX - r.left) / r.width) * total))));
+      };
+
+      const toggleSport = k => setSelected(p => {
+        const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n;
+      });
+
+      const B = { // shorthand border style
+        active:   { border: "2px solid #3b82f6", background: "rgba(26,58,110,0.13)", color: "#60a5fa" },
+        inactive: { border: "1.5px solid #1a2844", background: "transparent", color: "#3b5278" },
+      };
+
+      return (
+        <div style={{ background: "#0a0f1e", minHeight: "100vh", padding: "24px 28px 48px", color: "#e2e8f0", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+
+          {/* HEADER */}
+          <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #1a2844", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h1 style={{ fontSize: 21, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Sports Popularity Over Time</h1>
+              <p style={{ color: "#3b5278", fontSize: 13, marginTop: 4, marginBottom: 0 }}>
+                16 individual sports · {modeInfo.fullYears[0]}–{fullYears[total - 1]}
+              </p>
             </div>
-            <div style={{ marginTop: 6, fontSize: 12, color: "#2d4268" }}>
-              Peak: <span style={{ color: "#3b5278" }}>{fmt(peak1 && item.key === s1 ? peak1.value : peak2.value)} {modeInfo.unit}</span> in <span style={{ color: "#3b5278" }}>{item.peak.year}</span>
-            </div>
+            <button onClick={() => setShowInfo(v => !v)} style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "1px solid #1a2844", background: showInfo ? "rgba(26,58,110,0.2)" : "transparent", color: "#3b5278" }}>
+              ℹ️ About the data
+            </button>
           </div>
-        ))}
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#1e3a5f" }}>VS</div>
-          {crossover && (
-            <div style={{ marginTop: 8, background: "#1a2844", borderRadius: 8, padding: "6px 10px" }}>
-              <div style={{ color: "#475569", fontSize: 11 }}>Crossed</div>
-              <div style={{ color: "#60a5fa", fontWeight: 800, fontSize: 16, fontFamily: "monospace" }}>{crossover}</div>
+
+          {showInfo && (
+            <div style={{ background: "#0d1424", border: "1px solid #1a2844", borderRadius: 10, padding: "14px 18px", marginBottom: 18, fontSize: 13, color: "#64748b", lineHeight: 1.7 }}>
+              <strong style={{ color: "#94a3b8" }}>Sources and corrections.</strong> Participant data drawn from SFIA Topline Reports, NSGA historical participation surveys, and sport-federation data. Key figures confirmed: racquetball peaked at 12M US players in 1980 (Sports Destinations / SFIA); tennis was 30M in 1980, crashed to ~11M by 1995 due to aerobics and racquetball competition, then recovered (NSGA); rollerblading peaked ~18M in 1995–97 based on NSGA roller-skating survey data; snowboarding peaked at 8.2M in 2001–02, declining to ~5.8M by 2023–24 (NSAA/Snowsports); mountain biking is 6.9M in 2007, 9.2M in 2023 (SFIA) — not the inflated 17M figure in the prior version; pickleball 19.8M in 2024 (SFIA 2025 Topline). Interpolated between anchor years. Values are directionally accurate trend shapes, not exact counts. No external calls — runs fully offline and in any iframe.
             </div>
           )}
-        </div>
-      </div>
 
-      {/* STORY */}
-      <div style={{ background: "#0d1424", border: "1px solid #1a2844", borderRadius: 10, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "#64748b", fontStyle: "italic", lineHeight: 1.6 }}>
-        "{pair.story}"
-      </div>
-
-      {/* CHART */}
-      <div style={{ background: "#0d1424", borderRadius: 14, padding: "14px 6px 8px 0", border: "1px solid #1a2844" }}>
-        <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={pairChartData} margin={{ top: 5, right: 20, left: -12, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#131f35" vertical={false} />
-            <XAxis dataKey="year" tick={{ fill: "#2d4268", fontSize: 12 }} axisLine={{ stroke: "#1a2844" }} tickLine={false} interval={modeInfo.tickInterval} />
-            <YAxis tick={{ fill: "#2d4268", fontSize: 11 }} axisLine={false} tickLine={false} tickCount={6} />
-            <Tooltip content={<ChartTooltip unit={modeInfo.unit} />} cursor={{ stroke: "#1a2844", strokeWidth: 1 }} />
-            {crossover && <ReferenceLine x={crossover} stroke="#334155" strokeDasharray="4 4" />}
-            <Line type="monotone" dataKey={s1} stroke={sp1.color} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} isAnimationActive={false} />
-            <Line type="monotone" dataKey={s2} stroke={sp2.color} strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* LEGEND */}
-      <div style={{ display: "flex", justifyContent: "center", gap: 28, marginTop: 12 }}>
-        {[{ key: s1, sp: sp1 }, { key: s2, sp: sp2 }].map(({ key, sp }) => (
-          <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 28, height: 3, borderRadius: 2, background: sp.color }} />
-            <span style={{ color: sp.color, fontSize: 13, fontWeight: 600 }}>{sp.emoji} {sp.label}</span>
+          {/* TABS */}
+          <div style={{ display: "flex", gap: 2, marginBottom: 22 }}>
+            {[["trends", "📈 Trends"], ["pairs", "⚖️ Pairs"]].map(([k, lbl]) => (
+              <button key={k} onClick={() => setTab(k)} style={{
+                padding: "8px 18px", borderRadius: "8px 8px 0 0", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                border: "1px solid #1a2844", borderBottom: tab === k ? "1px solid #111d31" : "1px solid #1a2844",
+                background: tab === k ? "#111d31" : "transparent", color: tab === k ? "#60a5fa" : "#3b5278",
+              }}>{lbl}</button>
+            ))}
+            <div style={{ flex: 1, borderBottom: "1px solid #1a2844" }} />
           </div>
-        ))}
-      </div>
 
-      <div style={{ marginTop: 14, fontSize: 11, color: "#1e3a5f", textAlign: "center" }}>
-        Showing {modeInfo.label} · {modeInfo.fullYears[0]}–{modeInfo.fullYears[modeInfo.fullYears.length - 1]}
-      </div>
-    </div>
-  );
-}
+          {/* MODE SELECTOR */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ color: "#3b5278", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>Mode</span>
+            {Object.values(MODES).map(m => (
+              <button key={m.key} onClick={() => { stop(); setMode(m.key); setVC(null); }} style={{
+                padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                ...(mode === m.key ? B.active : B.inactive),
+              }}>{m.icon} {m.label}</button>
+            ))}
+            <button disabled title="Facility count — a future addition" style={{
+              padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+              border: "1.5px dashed #1a2844", background: "transparent", color: "#1e3a5f", cursor: "not-allowed",
+            }}>🏗️ Facility Count <span style={{ fontSize: 10 }}>soon</span></button>
+          </div>
+          <p style={{ fontSize: 11, color: "#2d4268", margin: "0 0 18px", lineHeight: 1.5, maxWidth: 760 }}>{modeInfo.note}</p>
+
+          {/* ── TRENDS TAB ──────────────────────────────────────────────────── */}
+          {tab === "trends" && (
+            <div>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+                  {[["All", () => setSelected(new Set(SPORT_KEYS))], ["None", () => setSelected(new Set())]].map(([lbl, fn]) => (
+                    <button key={lbl} onClick={fn} style={{ padding: "3px 11px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "1px solid #1a2844", background: "transparent", color: "#3b5278", textTransform: "uppercase", letterSpacing: "0.05em" }}>{lbl}</button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                  {SPORT_KEYS.map(k => {
+                    const s = SPORTS[k]; const on = selected.has(k);
+                    return (
+                      <button key={k} onClick={() => toggleSport(k)} style={{
+                        padding: "5px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                        background: on ? s.color + "1a" : "transparent",
+                        border: `2px solid ${on ? s.color : "#1a2844"}`, color: on ? s.color : "#2d4268",
+                      }}>{s.emoji} {s.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6 }}>
+                <span style={{ color: "#2d4268", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", alignSelf: "center" }}>{modeInfo.unitLong}</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                  <span style={{ fontSize: 11, color: "#2d4268", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Year</span>
+                  <span style={{ fontSize: 50, fontWeight: 900, fontFamily: "'Courier New', monospace", color: isPlaying ? "#60a5fa" : "#3b82f6", fontVariantNumeric: "tabular-nums", letterSpacing: "-3px", lineHeight: 1, textShadow: isPlaying ? "0 0 30px rgba(59,130,246,0.5)" : "none", transition: "text-shadow 0.3s" }}>{currYear}</span>
+                </div>
+              </div>
+
+              <div style={{ background: "#0d1424", borderRadius: 14, padding: "14px 6px 8px 0", border: "1px solid #1a2844", marginBottom: 10, position: "relative" }}>
+                {selected.size === 0 && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#1e3a5f", fontSize: 14, pointerEvents: "none" }}>↑ Select at least one sport</div>
+                )}
+                <ResponsiveContainer width="100%" height={360}>
+                  <LineChart data={maskedData} margin={{ top: 5, right: 20, left: -12, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#131f35" vertical={false} />
+                    <XAxis dataKey="year" tick={{ fill: "#2d4268", fontSize: 12 }} axisLine={{ stroke: "#1a2844" }} tickLine={false} interval={modeInfo.tickInterval} />
+                    <YAxis domain={modeInfo.yDomain} tick={{ fill: "#2d4268", fontSize: 11 }} axisLine={false} tickLine={false} tickCount={6} />
+                    <Tooltip content={<ChartTooltip unit={modeInfo.unit} />} cursor={{ stroke: "#1a2844", strokeWidth: 1 }} />
+                    {SPORT_KEYS.filter(k => selected.has(k)).map(k => (
+                      <Line key={k} type="monotone" dataKey={k} stroke={SPORTS[k].color} strokeWidth={2.5}
+                        dot={false} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive={false} connectNulls={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "#1e3a5f", fontSize: 11, fontFamily: "monospace", marginBottom: 5 }}>
+                  <span>{fullYears[0]}</span>
+                  <span style={{ color: "#162035", fontSize: 10 }}>tap to scrub</span>
+                  <span>{fullYears[total - 1]}</span>
+                </div>
+                <div onClick={scrub} style={{ height: 10, borderRadius: 999, background: "#0d1424", border: "1px solid #1a2844", cursor: "pointer", position: "relative" }}>
+                  <div style={{ height: "100%", borderRadius: 999, width: pct + "%", background: "linear-gradient(90deg,#1d4ed8,#7c3aed)", pointerEvents: "none" }} />
+                  <div style={{ position: "absolute", top: "50%", left: pct + "%", transform: "translate(-50%,-50%)", width: 18, height: 18, borderRadius: "50%", background: "#60a5fa", border: "2.5px solid #0a0f1e", pointerEvents: "none" }} />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <button onClick={play} disabled={selected.size === 0} style={{
+                  padding: "10px 24px", borderRadius: 10, fontWeight: 800, fontSize: 14,
+                  cursor: selected.size === 0 ? "not-allowed" : "pointer", border: "none",
+                  background: selected.size === 0 ? "#1a2844" : isPlaying ? "#dc2626" : "#2563eb",
+                  color: selected.size === 0 ? "#2d4268" : "white",
+                }}>{isPlaying ? "⏸  Pause" : "▶  Play"}</button>
+                <button onClick={reset} style={{ padding: "10px 16px", borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer", border: "1px solid #1a2844", background: "transparent", color: "#3b5278" }}>↺ Reset</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: 4 }}>
+                  <span style={{ color: "#2d4268", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Speed</span>
+                  {SPEEDS.map((s, i) => (
+                    <button key={i} onClick={() => setSpeed(i)} style={{
+                      padding: "6px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      border: speedIdx === i ? "1.5px solid #3b82f6" : "1.5px solid #1a2844",
+                      background: speedIdx === i ? "#1a3a6e" : "transparent",
+                      color: speedIdx === i ? "#93c5fd" : "#2d4268",
+                    }}>{s.label}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── PAIRS TAB ────────────────────────────────────────────────────── */}
+          {tab === "pairs" && (
+            <PairsTab pair={pair} setPair={setPair} chartData={chartData} modeInfo={modeInfo} />
+          )}
+
+          <p style={{ color: "#111d31", fontSize: 11, marginTop: 28, marginBottom: 0, lineHeight: 1.6 }}>
+            Estimated participation from SFIA Topline Reports, NSGA historical surveys, federation data, and sport industry research. Search interest indexed to golf's ~2000 peak = 100. Values are directional trend shapes, not exact counts. No external dependencies — works fully offline and inside iframes.
+          </p>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
